@@ -102,7 +102,7 @@ const LoginUser=asyncHandler(async(req,res)=>{
     if(!user){
         throw new ApiError(400,"user does not exist")
     }
-    const isPasswordcorrect=user.isPasswordCorrect(password);
+    const isPasswordcorrect=await user.isPasswordCorrect(password);
     if(!isPasswordcorrect){
         throw new ApiError(400,"password is incorrect");
     }
@@ -123,8 +123,90 @@ const LoginUser=asyncHandler(async(req,res)=>{
     .cookie("accesstoken",accessToken,options)
     .cookie("refreshtoken",refreshToken,options)
     .json(new ApiResponse(200,{loggedInUser,accessToken,refreshToken},"user loggedin successfully"));
+});
+const LogoutUser=asyncHandler(async(req,res)=>{
+    //delete refresh tokens from user data 
+    //clear cookies from browser
+    const user=User.findById(
+        req.user?._id)
+    if(!user){
+        throw new ApiError(400,"invalid request");
+    }
+    user.refreshToken=""
+
+    const options={
+        httpOnly:true,
+        secure:true,
+    }
+    //clear cookies from browser
+    res.status(200)
+    .clearCookie("accesstoken",options)
+    .clearCookie("refreshtoken",options)
+    .json(new ApiResponse(200,"user logout successfully"))
+});
+const changePassword=asyncHandler(async(req,res)=>{
+    const {oldpassword,newpassword}=req.body
+    const user=await User.findById(req.user._id)
+    if(!user){
+        throw new ApiError(400,"fail to find user")
+    }
+    const checkpassword=await user.isPasswordCorrect(oldpassword)
+    if(!checkpassword){
+        throw new ApiError(400,"invalid old password")
+    }
+    user.password=newpassword;
+    await user.save({validateBeforeSave:false})
+    res.status(200)
+    .json(new ApiResponse(200,user,"password changed success"))
+})
+const updateDetails=asyncHandler(async(req,res)=>{
+//geting updated value from user
+//update values in database 
+//do this after verify jwt tokens 
+const {fullName,bio,email}=req.body
+if(!(fullName||bio||email)) return null
+const user=await User.findByIdAndUpdate(
+    req.user._id,
+    {
+        $set:{
+            fullName,
+            bio,
+            email
+        }
+    },
+    {
+        new:true
+    }
+).select("-password ")
+res.status(200)
+.json(200,user,"changes done successfully")
+})
+const searchUser=asyncHandler(async(req,res)=>{
+    //get username from user
+    //find username from database
+    //if user exist return user else throw error 
+    const {userName}=req.body;
+    const serchedUser=await User.findOne({userName}).select("-password -refreshToken -_id")
+    if(!searchUser){
+      throw new ApiError(400,"user not found")   
+    }
+    res.status(200)
+    .json(
+        new ApiResponse(200,serchedUser,"user found")
+    )
+})
+const getCurrentUser=asyncHandler(async(req,res)=>{
+    //get current user details from tokens
+    //verify if user login or not
+    //return user
+    const user=await User.findById(req.user?._id).select("-password -refreshToken -_id")
+    if(!user){
+        throw new ApiError(401,"login before visiting profile")
+    }
+    res.status(200)
+    .json(new ApiResponse(200,user,"user profile success"));
 })
 
 
 
-export {registerUser,UploadImage,LoginUser}
+export {registerUser,UploadImage,LoginUser,LogoutUser,changePassword,updateDetails,searchUser,getCurrentUser}
